@@ -1,0 +1,1804 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Get It Done</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&display=swap" rel="stylesheet">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="white">
+    <link rel="apple-touch-icon" href="/get-it-done-icon-192.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <!-- ═══════════════════════════════════════════════════════
+         GET IT DONE — ACCURATE CROP + HD PHOTO/PDF + EDIT PATIENT SYSTEM
+         ═══════════════════════════════════════════════════════ -->
+    <style>
+      #gi-crop-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: rgba(0,0,0,0.92);
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        gap: 14px;
+        touch-action: none;
+      }
+      #gi-crop-overlay.active { display: flex; }
+      #gi-crop-container {
+        position: relative;
+        width: 100%;
+        max-width: 620px;
+        flex: 1 1 auto;
+        overflow: hidden;
+        border-radius: 16px;
+        background: #050505;
+        cursor: crosshair;
+        user-select: none;
+        -webkit-user-select: none;
+        max-height: calc(100vh - 190px);
+        touch-action: none;
+      }
+      #gi-crop-img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+      #gi-crop-box {
+        position: absolute;
+        border: 3px solid #38bdf8;
+        box-shadow: 0 0 0 9999px rgba(0,0,0,0.58);
+        cursor: move;
+        box-sizing: border-box;
+        touch-action: none;
+      }
+      #gi-crop-box::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(to right, transparent 33.333%, rgba(255,255,255,.55) 33.333%, rgba(255,255,255,.55) calc(33.333% + 1px), transparent calc(33.333% + 1px), transparent 66.666%, rgba(255,255,255,.55) 66.666%, rgba(255,255,255,.55) calc(66.666% + 1px), transparent calc(66.666% + 1px)),
+          linear-gradient(to bottom, transparent 33.333%, rgba(255,255,255,.55) 33.333%, rgba(255,255,255,.55) calc(33.333% + 1px), transparent calc(33.333% + 1px), transparent 66.666%, rgba(255,255,255,.55) 66.666%, rgba(255,255,255,.55) calc(66.666% + 1px), transparent calc(66.666% + 1px));
+      }
+      .gi-crop-handle {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        background: white;
+        border-radius: 9999px;
+        border: 3px solid #38bdf8;
+        transform: translate(-50%, -50%);
+        cursor: nwse-resize;
+        touch-action: none;
+        z-index: 10;
+        box-shadow: 0 3px 10px rgba(0,0,0,.28);
+      }
+      .gi-crop-handle[data-pos="nw"] { top: 0; left: 0; cursor: nwse-resize; }
+      .gi-crop-handle[data-pos="ne"] { top: 0; left: 100%; cursor: nesw-resize; }
+      .gi-crop-handle[data-pos="sw"] { top: 100%; left: 0; cursor: nesw-resize; }
+      .gi-crop-handle[data-pos="se"] { top: 100%; left: 100%; cursor: nwse-resize; }
+      .gi-crop-handle[data-pos="n"]  { top: 0; left: 50%; width: 24px; height: 24px; cursor: ns-resize; }
+      .gi-crop-handle[data-pos="s"]  { top: 100%; left: 50%; width: 24px; height: 24px; cursor: ns-resize; }
+      .gi-crop-handle[data-pos="w"]  { top: 50%; left: 0; width: 24px; height: 24px; cursor: ew-resize; }
+      .gi-crop-handle[data-pos="e"]  { top: 50%; left: 100%; width: 24px; height: 24px; cursor: ew-resize; }
+      #gi-crop-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+        width: 100%;
+        max-width: 620px;
+      }
+      #gi-crop-actions button {
+        padding: 15px 18px;
+        border-radius: 14px;
+        font-weight: 900;
+        font-size: 16px;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.15s, transform 0.15s;
+      }
+      #gi-crop-actions button:active { opacity: 0.75; transform: scale(.99); }
+      #gi-crop-actions .btn-cancel { background: #334155; color: #e2e8f0; }
+      #gi-crop-actions .btn-crop   { background: #059669; color: white; }
+      #gi-crop-actions .btn-skip-crop { background: #7c3aed; color: white; }
+      #gi-crop-quality-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        color: #cbd5e1;
+        font-size: 13px;
+        font-weight: 700;
+        width: 100%;
+        max-width: 620px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .gi-q-btn {
+        padding: 8px 16px;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 13px;
+        cursor: pointer;
+        border: 2px solid transparent;
+        background: #334155;
+        color: #cbd5e1;
+        transition: all 0.15s;
+      }
+      .gi-q-btn.active { background: #0ea5e9; color: white; border-color: #38bdf8; }
+      #gi-crop-help {
+        color: #94a3b8;
+        font-size: 12px;
+        text-align: center;
+        line-height: 1.35;
+        max-width: 620px;
+      }
+      #gi-copy-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 100000;
+        background: rgba(0,0,0,0.88);
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        gap: 14px;
+      }
+      #gi-copy-overlay.active { display: flex; }
+      #gi-copy-preview {
+        max-width: 520px;
+        width: 100%;
+        border-radius: 14px;
+        object-fit: contain;
+        max-height: calc(100vh - 160px);
+        background: #111;
+      }
+      #gi-copy-actions {
+        display: flex;
+        gap: 12px;
+        width: 100%;
+        max-width: 620px;
+        flex-wrap: wrap;
+      }
+      #gi-copy-actions button {
+        flex: 1;
+        min-width: 120px;
+        padding: 13px;
+        border-radius: 13px;
+        font-weight: 800;
+        font-size: 15px;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-copy-save  { background: #059669; color: white; }
+      .btn-copy-copy  { background: #2563eb; color: white; }
+      .btn-copy-crop  { background: #7c3aed; color: white; }
+      .btn-copy-discard { background: #334155; color: #e2e8f0; }
+      .left-6 { left: 1.5rem; }
+      .gi-main-copy-btn {
+        position: absolute;
+        top: 1.5rem;
+        left: 5.25rem;
+        z-index: 120;
+        border: none;
+        border-radius: 9999px;
+        padding: 10px 14px;
+        background: rgba(37, 99, 235, 0.9);
+        color: white;
+        font-weight: 900;
+        font-size: 14px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.28);
+      }
+      .gi-thumb-copy-btn {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        z-index: 20;
+        border: none;
+        border-radius: 9999px;
+        padding: 6px 9px;
+        background: rgba(15, 23, 42, 0.88);
+        color: white;
+        font-weight: 900;
+        font-size: 12px;
+        box-shadow: 0 6px 14px rgba(0,0,0,0.22);
+      }
+      .gi-main-copy-btn:active, .gi-thumb-copy-btn:active { transform: scale(0.97); }
+    </style>
+
+    <script>
+    (function() {
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().then(granted => {
+          console.log('[GID] Persistent storage:', granted ? 'GRANTED' : 'DENIED (best-effort)');
+        }).catch(()=>{});
+      }
+      if (navigator.storage && navigator.storage.estimate) {
+        navigator.storage.estimate().then(est => {
+          const mb = q => (q / 1024 / 1024).toFixed(1) + ' MB';
+          console.log('[GID] Storage quota:', mb(est.quota), '| used:', mb(est.usage));
+        }).catch(()=>{});
+      }
+
+      let _pendingCallback = null;
+      let _cropQuality = 0.98;
+      let _srcDataUrl = null;
+      let _reviewDataUrl = null;
+      let drag = null;
+      let cropRect = { x: 0, y: 0, w: 1, h: 1 };
+
+      const overlayHTML = `
+        <div id="gi-crop-overlay">
+          <div id="gi-crop-quality-row">
+            <span>Quality:</span>
+            <button class="gi-q-btn active" data-q="0.98">High</button>
+            <button class="gi-q-btn" data-q="0.90">Med</button>
+            <button class="gi-q-btn" data-q="0.75">Low</button>
+          </div>
+          <div id="gi-crop-container">
+            <img id="gi-crop-img" alt="preview" draggable="false" />
+            <div id="gi-crop-box">
+              <div class="gi-crop-handle" data-pos="nw"></div>
+              <div class="gi-crop-handle" data-pos="n"></div>
+              <div class="gi-crop-handle" data-pos="ne"></div>
+              <div class="gi-crop-handle" data-pos="w"></div>
+              <div class="gi-crop-handle" data-pos="e"></div>
+              <div class="gi-crop-handle" data-pos="sw"></div>
+              <div class="gi-crop-handle" data-pos="s"></div>
+              <div class="gi-crop-handle" data-pos="se"></div>
+            </div>
+          </div>
+          <div id="gi-crop-actions">
+            <button class="btn-cancel" id="gi-crop-cancel">✕ Cancel</button>
+            <button class="btn-skip-crop" id="gi-crop-skip">⚡ Save Full</button>
+            <button class="btn-crop" id="gi-crop-confirm">✓ Save Crop</button>
+          </div>
+          <div id="gi-crop-help">Drag inside the blue box to move. Drag corners or side dots to crop accurately. Saved PDF uses the saved high-quality crop.</div>
+        </div>`;
+
+      const copyHTML = `
+        <div id="gi-copy-overlay">
+          <img id="gi-copy-preview" alt="preview" />
+          <div id="gi-copy-actions">
+            <button class="btn-copy-discard" id="gi-copy-discard">✕ Discard</button>
+            <button class="btn-copy-crop" id="gi-copy-crop-again">✂ Crop</button>
+            <button class="btn-copy-save" id="gi-copy-save">✓ Save Photo</button>
+          </div>
+        </div>`;
+
+      document.addEventListener('DOMContentLoaded', () => {
+        document.body.insertAdjacentHTML('beforeend', overlayHTML);
+        document.body.insertAdjacentHTML('beforeend', copyHTML);
+        initCropModal();
+        initCopyOverlay();
+        installPhotoCopyButtons();
+        new MutationObserver(installPhotoCopyButtons).observe(document.body, { childList: true, subtree: true });
+      });
+
+      function initCropModal() {
+        document.querySelectorAll('.gi-q-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            _cropQuality = parseFloat(btn.dataset.q);
+            document.querySelectorAll('.gi-q-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+          });
+        });
+        document.getElementById('gi-crop-cancel').addEventListener('click', () => closeCrop(null));
+        document.getElementById('gi-crop-confirm').addEventListener('click', applyCrop);
+        document.getElementById('gi-crop-skip').addEventListener('click', () => {
+          const img2 = new Image();
+          img2.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX = 1600;
+            const scale = Math.min(1, MAX / Math.max(img2.naturalWidth, img2.naturalHeight));
+            canvas.width = Math.max(1, Math.round(img2.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(img2.naturalHeight * scale));
+            const ctx = canvas.getContext('2d', {alpha:false});
+            ctx.drawImage(img2, 0, 0, canvas.width, canvas.height);
+            try {
+              const url = canvas.toDataURL('image/jpeg', 0.82);
+              if (!url || url === 'data:,') { alert('Unable to save photo.'); return; }
+              closeCrop(url);
+            } catch(e) { alert('Unable to save photo. Try a smaller image.'); }
+          };
+          img2.onerror = () => { console.warn('[GID] image load failed; saving original without popup'); closeCrop(_srcDataUrl); };
+          img2.src = _srcDataUrl;
+        });
+        initCropDrag();
+        window.addEventListener('resize', () => applyBox(cropRect));
+      }
+
+      function initCopyOverlay() {
+        const copyOverlay = document.getElementById('gi-copy-overlay');
+        const preview = document.getElementById('gi-copy-preview');
+        document.getElementById('gi-copy-discard').addEventListener('click', () => {
+          copyOverlay.classList.remove('active');
+          _pendingCallback = null;
+          _reviewDataUrl = null;
+        });
+        document.getElementById('gi-copy-crop-again').addEventListener('click', () => {
+          const cb = _pendingCallback;
+          const src = _reviewDataUrl || preview.src;
+          copyOverlay.classList.remove('active');
+          if (src) window.__GiShowCropModal(src, cb);
+        });
+        document.getElementById('gi-copy-save').addEventListener('click', () => {
+          const cb = _pendingCallback;
+          const src = _reviewDataUrl || preview.src;
+          copyOverlay.classList.remove('active');
+          if (cb && src) cb(src);
+          _pendingCallback = null;
+          _reviewDataUrl = null;
+        });
+      }
+
+      function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+      const MIN_SIZE = 0.035;
+
+      function getImageDisplayRect() {
+        const container = document.getElementById('gi-crop-container');
+        const img = document.getElementById('gi-crop-img');
+        const cr = container.getBoundingClientRect();
+        const iw = img.naturalWidth || 1;
+        const ih = img.naturalHeight || 1;
+        const imgRatio = iw / ih;
+        const contRatio = cr.width / cr.height;
+        let width, height, left, top;
+        if (contRatio > imgRatio) {
+          height = cr.height;
+          width = height * imgRatio;
+          left = (cr.width - width) / 2;
+          top = 0;
+        } else {
+          width = cr.width;
+          height = width / imgRatio;
+          left = 0;
+          top = (cr.height - height) / 2;
+        }
+        return { left, top, width, height };
+      }
+
+      function normalizeRect(r) {
+        let w = Math.max(MIN_SIZE, Math.min(1, Math.abs(r.w || MIN_SIZE)));
+        let h = Math.max(MIN_SIZE, Math.min(1, Math.abs(r.h || MIN_SIZE)));
+        let x = Math.max(0, Math.min(1 - w, r.x || 0));
+        let y = Math.max(0, Math.min(1 - h, r.y || 0));
+        return { x, y, w, h };
+      }
+
+      function applyBox(r) {
+        const box = document.getElementById('gi-crop-box');
+        if (!box) return;
+        cropRect = normalizeRect(r || cropRect);
+        const dr = getImageDisplayRect();
+        box.style.left = (dr.left + cropRect.x * dr.width) + 'px';
+        box.style.top = (dr.top + cropRect.y * dr.height) + 'px';
+        box.style.width = (cropRect.w * dr.width) + 'px';
+        box.style.height = (cropRect.h * dr.height) + 'px';
+      }
+
+      function clientToNorm(cx, cy) {
+        const container = document.getElementById('gi-crop-container');
+        const cr = container.getBoundingClientRect();
+        const dr = getImageDisplayRect();
+        return {
+          x: clamp01((cx - cr.left - dr.left) / dr.width),
+          y: clamp01((cy - cr.top - dr.top) / dr.height)
+        };
+      }
+
+      function initCropDrag() {
+        const container = document.getElementById('gi-crop-container');
+        const box = document.getElementById('gi-crop-box');
+
+        function onStart(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const n = clientToNorm(e.clientX, e.clientY);
+          const handle = e.target && e.target.dataset ? e.target.dataset.pos : null;
+          if (handle) {
+            drag = { type: handle, sx: n.x, sy: n.y, ox: cropRect.x, oy: cropRect.y, ow: cropRect.w, oh: cropRect.h };
+          } else if (e.target === box || box.contains(e.target)) {
+            drag = { type: 'move', sx: n.x, sy: n.y, ox: cropRect.x, oy: cropRect.y, ow: cropRect.w, oh: cropRect.h };
+          } else {
+            drag = { type: 'new', sx: n.x, sy: n.y };
+            cropRect = { x: n.x, y: n.y, w: MIN_SIZE, h: MIN_SIZE };
+            applyBox(cropRect);
+          }
+          if (e.pointerId && container.setPointerCapture) {
+            try { container.setPointerCapture(e.pointerId); } catch(_) {}
+          }
+        }
+
+        function onMove(e) {
+          if (!drag) return;
+          e.preventDefault();
+          const n = clientToNorm(e.clientX, e.clientY);
+          const dx = n.x - drag.sx;
+          const dy = n.y - drag.sy;
+
+          if (drag.type === 'move') {
+            cropRect = { x: drag.ox + dx, y: drag.oy + dy, w: drag.ow, h: drag.oh };
+          } else if (drag.type === 'new') {
+            cropRect = {
+              x: Math.min(drag.sx, n.x),
+              y: Math.min(drag.sy, n.y),
+              w: Math.max(MIN_SIZE, Math.abs(n.x - drag.sx)),
+              h: Math.max(MIN_SIZE, Math.abs(n.y - drag.sy))
+            };
+          } else {
+            let left = drag.ox;
+            let top = drag.oy;
+            let right = drag.ox + drag.ow;
+            let bottom = drag.oy + drag.oh;
+            if (drag.type.includes('w')) left = clamp01(drag.ox + dx);
+            if (drag.type.includes('e')) right = clamp01(drag.ox + drag.ow + dx);
+            if (drag.type.includes('n')) top = clamp01(drag.oy + dy);
+            if (drag.type.includes('s')) bottom = clamp01(drag.oy + drag.oh + dy);
+            if (right - left < MIN_SIZE) {
+              if (drag.type.includes('w')) left = right - MIN_SIZE;
+              else right = left + MIN_SIZE;
+            }
+            if (bottom - top < MIN_SIZE) {
+              if (drag.type.includes('n')) top = bottom - MIN_SIZE;
+              else bottom = top + MIN_SIZE;
+            }
+            cropRect = { x: left, y: top, w: right - left, h: bottom - top };
+          }
+          applyBox(cropRect);
+        }
+
+        function onEnd() { drag = null; }
+        container.addEventListener('pointerdown', onStart);
+        window.addEventListener('pointermove', onMove, { passive: false });
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
+      }
+
+      function applyCrop() {
+        const img = document.getElementById('gi-crop-img');
+        const iw = img.naturalWidth;
+        const ih = img.naturalHeight;
+        const r = normalizeRect(cropRect);
+        const sx = Math.round(r.x * iw);
+        const sy = Math.round(r.y * ih);
+        const sw = Math.max(1, Math.round(r.w * iw));
+        const sh = Math.max(1, Math.round(r.h * ih));
+        compressDataUrl(_srcDataUrl, sw, sh, sx, sy, sw, sh, _cropQuality)
+          .then(url => closeCrop(url))
+          .catch(err => { console.error('[GID] crop failed', err); closeCrop(_srcDataUrl); });
+      }
+
+      function compressDataUrl(dataUrl, dw, dh, sx, sy, sw, sh, quality) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              // iOS Safari: keep canvas pixels under 4MP to avoid blank output
+              const MAX_PX = 3000000;
+              const MAX_DIM = 1920;
+              let cw = Math.max(1, Math.round(dw));
+              let ch = Math.max(1, Math.round(dh));
+              // Scale down if too large for iOS
+              const scaleByDim = Math.min(1, MAX_DIM / Math.max(cw, ch));
+              const scaleByPx  = Math.min(1, Math.sqrt(MAX_PX / (cw * ch)));
+              const scale = Math.min(scaleByDim, scaleByPx);
+              canvas.width  = Math.max(1, Math.round(cw * scale));
+              canvas.height = Math.max(1, Math.round(ch * scale));
+              const ctx = canvas.getContext('2d', { alpha: false });
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+              // Try jpeg first, fallback to lower quality if it fails
+              let result = '';
+              try { result = canvas.toDataURL('image/jpeg', 0.82); } catch(e1) {
+                try {
+                  canvas.width = Math.round(canvas.width * 0.5);
+                  canvas.height = Math.round(canvas.height * 0.5);
+                  const ctx2 = canvas.getContext('2d', { alpha: false });
+                  ctx2.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+                  result = canvas.toDataURL('image/jpeg', 0.75);
+                } catch(e2) { reject(e2); return; }
+              }
+              if (!result || result === 'data:,') { reject(new Error('Canvas empty')); return; }
+              resolve(result);
+            } catch (err) { reject(err); }
+          };
+          img.onerror = () => reject(new Error('Image load failed'));
+          img.src = dataUrl;
+        });
+      }
+
+      function closeCrop(resultUrl) {
+        document.getElementById('gi-crop-overlay').classList.remove('active');
+        const cb = _pendingCallback;
+        if (resultUrl && cb) cb(resultUrl);
+        _pendingCallback = null;
+        _reviewDataUrl = null;
+        drag = null;
+      }
+
+      window.__GiShowCropModal = function(dataUrl, callback) {
+        _srcDataUrl = dataUrl;
+        _pendingCallback = callback;
+        const overlay = document.getElementById('gi-crop-overlay');
+        const img = document.getElementById('gi-crop-img');
+        const container = document.getElementById('gi-crop-container');
+        img.onload = () => {
+          const ratio = (img.naturalWidth || 1) / (img.naturalHeight || 1);
+          container.style.aspectRatio = String(ratio);
+          cropRect = { x: 0, y: 0, w: 1, h: 1 };
+          requestAnimationFrame(() => applyBox(cropRect));
+        };
+        img.src = dataUrl;
+        overlay.classList.add('active');
+        setTimeout(() => applyBox(cropRect), 60);
+      };
+
+      function dataUrlToPngBlob(dataUrl) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Unable to create image blob')), 'image/png');
+          };
+          img.onerror = () => reject(new Error('Image load failed'));
+          img.src = dataUrl;
+        });
+      }
+
+      async function copyDataUrlToClipboard(dataUrl) {
+        const blob = await dataUrlToPngBlob(dataUrl);
+        if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write) {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          return true;
+        }
+        const file = new File([blob], 'photo.png', { type: 'image/png' });
+        if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+          await navigator.share({ files: [file], title: 'Photo' });
+          return true;
+        }
+        throw new Error('Image copy is not supported by this browser');
+      }
+
+      window.__GiCopyImageToClipboard = async function(dataUrl, button) {
+        if (!dataUrl) return;
+        const oldText = button ? button.textContent : '';
+        if (button) button.textContent = 'Copying...';
+        try {
+          await copyDataUrlToClipboard(dataUrl);
+          if (button) button.textContent = 'Copied!';
+        } catch (err) {
+          console.warn('[GID] Copy image failed:', err);
+          if (button) button.textContent = 'Open Image';
+          const w = window.open(dataUrl, '_blank');
+          if (!w) alert('Copy is blocked by this browser. Long-press the photo and choose Copy/Save Image.');
+        } finally {
+          if (button) setTimeout(() => { button.textContent = oldText || 'Copy'; }, 1400);
+        }
+      };
+
+      function installPhotoCopyButtons() {
+        document.querySelectorAll('.gi-main-copy-btn,.gi-thumb-copy-btn').forEach(btn => btn.remove());
+      }
+    })();
+    </script>
+    <!-- ── END PHOTO SYSTEM ── -->
+
+<!-- ═══════════════════════════════════════════════════════
+         GET IT DONE — ACCURATE CROP + HD PHOTO/PDF + EDIT PATIENT SYSTEM
+         ═══════════════════════════════════════════════════════ -->
+    <style>
+      #gi-crop-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: rgba(0,0,0,0.92);
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        gap: 14px;
+        touch-action: none;
+      }
+      #gi-crop-overlay.active { display: flex; }
+      #gi-crop-container {
+        position: relative;
+        width: 100%;
+        max-width: 620px;
+        flex: 1 1 auto;
+        overflow: hidden;
+        border-radius: 16px;
+        background: #050505;
+        cursor: crosshair;
+        user-select: none;
+        -webkit-user-select: none;
+        max-height: calc(100vh - 190px);
+        touch-action: none;
+      }
+      #gi-crop-img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+      #gi-crop-box {
+        position: absolute;
+        border: 3px solid #38bdf8;
+        box-shadow: 0 0 0 9999px rgba(0,0,0,0.58);
+        cursor: move;
+        box-sizing: border-box;
+        touch-action: none;
+      }
+      #gi-crop-box::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(to right, transparent 33.333%, rgba(255,255,255,.55) 33.333%, rgba(255,255,255,.55) calc(33.333% + 1px), transparent calc(33.333% + 1px), transparent 66.666%, rgba(255,255,255,.55) 66.666%, rgba(255,255,255,.55) calc(66.666% + 1px), transparent calc(66.666% + 1px)),
+          linear-gradient(to bottom, transparent 33.333%, rgba(255,255,255,.55) 33.333%, rgba(255,255,255,.55) calc(33.333% + 1px), transparent calc(33.333% + 1px), transparent 66.666%, rgba(255,255,255,.55) 66.666%, rgba(255,255,255,.55) calc(66.666% + 1px), transparent calc(66.666% + 1px));
+      }
+      .gi-crop-handle {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        background: white;
+        border-radius: 9999px;
+        border: 3px solid #38bdf8;
+        transform: translate(-50%, -50%);
+        cursor: nwse-resize;
+        touch-action: none;
+        z-index: 10;
+        box-shadow: 0 3px 10px rgba(0,0,0,.28);
+      }
+      .gi-crop-handle[data-pos="nw"] { top: 0; left: 0; cursor: nwse-resize; }
+      .gi-crop-handle[data-pos="ne"] { top: 0; left: 100%; cursor: nesw-resize; }
+      .gi-crop-handle[data-pos="sw"] { top: 100%; left: 0; cursor: nesw-resize; }
+      .gi-crop-handle[data-pos="se"] { top: 100%; left: 100%; cursor: nwse-resize; }
+      .gi-crop-handle[data-pos="n"]  { top: 0; left: 50%; width: 24px; height: 24px; cursor: ns-resize; }
+      .gi-crop-handle[data-pos="s"]  { top: 100%; left: 50%; width: 24px; height: 24px; cursor: ns-resize; }
+      .gi-crop-handle[data-pos="w"]  { top: 50%; left: 0; width: 24px; height: 24px; cursor: ew-resize; }
+      .gi-crop-handle[data-pos="e"]  { top: 50%; left: 100%; width: 24px; height: 24px; cursor: ew-resize; }
+      #gi-crop-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+        width: 100%;
+        max-width: 620px;
+      }
+      #gi-crop-actions button {
+        padding: 15px 18px;
+        border-radius: 14px;
+        font-weight: 900;
+        font-size: 16px;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.15s, transform 0.15s;
+      }
+      #gi-crop-actions button:active { opacity: 0.75; transform: scale(.99); }
+      #gi-crop-actions .btn-cancel { background: #334155; color: #e2e8f0; }
+      #gi-crop-actions .btn-crop   { background: #059669; color: white; }
+      #gi-crop-actions .btn-skip-crop { background: #7c3aed; color: white; }
+      #gi-crop-quality-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        color: #cbd5e1;
+        font-size: 13px;
+        font-weight: 700;
+        width: 100%;
+        max-width: 620px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .gi-q-btn {
+        padding: 8px 16px;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 13px;
+        cursor: pointer;
+        border: 2px solid transparent;
+        background: #334155;
+        color: #cbd5e1;
+        transition: all 0.15s;
+      }
+      .gi-q-btn.active { background: #0ea5e9; color: white; border-color: #38bdf8; }
+      #gi-crop-help {
+        color: #94a3b8;
+        font-size: 12px;
+        text-align: center;
+        line-height: 1.35;
+        max-width: 620px;
+      }
+      #gi-copy-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 100000;
+        background: rgba(0,0,0,0.88);
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        gap: 14px;
+      }
+      #gi-copy-overlay.active { display: flex; }
+      #gi-copy-preview {
+        max-width: 520px;
+        width: 100%;
+        border-radius: 14px;
+        object-fit: contain;
+        max-height: calc(100vh - 160px);
+        background: #111;
+      }
+      #gi-copy-actions {
+        display: flex;
+        gap: 12px;
+        width: 100%;
+        max-width: 620px;
+        flex-wrap: wrap;
+      }
+      #gi-copy-actions button {
+        flex: 1;
+        min-width: 120px;
+        padding: 13px;
+        border-radius: 13px;
+        font-weight: 800;
+        font-size: 15px;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-copy-save  { background: #059669; color: white; }
+      .btn-copy-copy  { background: #2563eb; color: white; }
+      .btn-copy-crop  { background: #7c3aed; color: white; }
+      .btn-copy-discard { background: #334155; color: #e2e8f0; }
+      .left-6 { left: 1.5rem; }
+      .gi-main-copy-btn {
+        position: absolute;
+        top: 1.5rem;
+        left: 5.25rem;
+        z-index: 120;
+        border: none;
+        border-radius: 9999px;
+        padding: 10px 14px;
+        background: rgba(37, 99, 235, 0.9);
+        color: white;
+        font-weight: 900;
+        font-size: 14px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.28);
+      }
+      .gi-thumb-copy-btn {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        z-index: 20;
+        border: none;
+        border-radius: 9999px;
+        padding: 6px 9px;
+        background: rgba(15, 23, 42, 0.88);
+        color: white;
+        font-weight: 900;
+        font-size: 12px;
+        box-shadow: 0 6px 14px rgba(0,0,0,0.22);
+      }
+      .gi-main-copy-btn:active, .gi-thumb-copy-btn:active { transform: scale(0.97); }
+    </style>
+
+    <script>
+    (function() {
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().then(granted => {
+          console.log('[GID] Persistent storage:', granted ? 'GRANTED' : 'DENIED (best-effort)');
+        }).catch(()=>{});
+      }
+      if (navigator.storage && navigator.storage.estimate) {
+        navigator.storage.estimate().then(est => {
+          const mb = q => (q / 1024 / 1024).toFixed(1) + ' MB';
+          console.log('[GID] Storage quota:', mb(est.quota), '| used:', mb(est.usage));
+        }).catch(()=>{});
+      }
+
+      let _pendingCallback = null;
+      let _cropQuality = 0.98;
+      let _srcDataUrl = null;
+      let _reviewDataUrl = null;
+      let drag = null;
+      let cropRect = { x: 0, y: 0, w: 1, h: 1 };
+
+      const overlayHTML = `
+        <div id="gi-crop-overlay">
+          <div id="gi-crop-quality-row">
+            <span>Quality:</span>
+            <button class="gi-q-btn active" data-q="0.98">High</button>
+            <button class="gi-q-btn" data-q="0.90">Med</button>
+            <button class="gi-q-btn" data-q="0.75">Low</button>
+          </div>
+          <div id="gi-crop-container">
+            <img id="gi-crop-img" alt="preview" draggable="false" />
+            <div id="gi-crop-box">
+              <div class="gi-crop-handle" data-pos="nw"></div>
+              <div class="gi-crop-handle" data-pos="n"></div>
+              <div class="gi-crop-handle" data-pos="ne"></div>
+              <div class="gi-crop-handle" data-pos="w"></div>
+              <div class="gi-crop-handle" data-pos="e"></div>
+              <div class="gi-crop-handle" data-pos="sw"></div>
+              <div class="gi-crop-handle" data-pos="s"></div>
+              <div class="gi-crop-handle" data-pos="se"></div>
+            </div>
+          </div>
+          <div id="gi-crop-actions">
+            <button class="btn-cancel" id="gi-crop-cancel">✕ Cancel</button>
+            <button class="btn-skip-crop" id="gi-crop-skip">⚡ Save Full</button>
+            <button class="btn-crop" id="gi-crop-confirm">✓ Save Crop</button>
+          </div>
+          <div id="gi-crop-help">Drag inside the blue box to move. Drag corners or side dots to crop accurately. Saved PDF uses the saved high-quality crop.</div>
+        </div>`;
+
+      const copyHTML = `
+        <div id="gi-copy-overlay">
+          <img id="gi-copy-preview" alt="preview" />
+          <div id="gi-copy-actions">
+            <button class="btn-copy-discard" id="gi-copy-discard">✕ Discard</button>
+            <button class="btn-copy-crop" id="gi-copy-crop-again">✂ Crop</button>
+            <button class="btn-copy-save" id="gi-copy-save">✓ Save Photo</button>
+          </div>
+        </div>`;
+
+      document.addEventListener('DOMContentLoaded', () => {
+        document.body.insertAdjacentHTML('beforeend', overlayHTML);
+        document.body.insertAdjacentHTML('beforeend', copyHTML);
+        initCropModal();
+        initCopyOverlay();
+        installPhotoCopyButtons();
+        new MutationObserver(installPhotoCopyButtons).observe(document.body, { childList: true, subtree: true });
+      });
+
+      function initCropModal() {
+        document.querySelectorAll('.gi-q-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            _cropQuality = parseFloat(btn.dataset.q);
+            document.querySelectorAll('.gi-q-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+          });
+        });
+        document.getElementById('gi-crop-cancel').addEventListener('click', () => closeCrop(null));
+        document.getElementById('gi-crop-confirm').addEventListener('click', applyCrop);
+        document.getElementById('gi-crop-skip').addEventListener('click', () => {
+          const img2 = new Image();
+          img2.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX = 1600;
+            const scale = Math.min(1, MAX / Math.max(img2.naturalWidth, img2.naturalHeight));
+            canvas.width = Math.max(1, Math.round(img2.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(img2.naturalHeight * scale));
+            const ctx = canvas.getContext('2d', {alpha:false});
+            ctx.drawImage(img2, 0, 0, canvas.width, canvas.height);
+            try {
+              const url = canvas.toDataURL('image/jpeg', 0.82);
+              if (!url || url === 'data:,') { alert('Unable to save photo.'); return; }
+              closeCrop(url);
+            } catch(e) { alert('Unable to save photo. Try a smaller image.'); }
+          };
+          img2.onerror = () => { console.warn('[GID] image load failed; saving original without popup'); closeCrop(_srcDataUrl); };
+          img2.src = _srcDataUrl;
+        });
+        initCropDrag();
+        window.addEventListener('resize', () => applyBox(cropRect));
+      }
+
+      function initCopyOverlay() {
+        const copyOverlay = document.getElementById('gi-copy-overlay');
+        const preview = document.getElementById('gi-copy-preview');
+        document.getElementById('gi-copy-discard').addEventListener('click', () => {
+          copyOverlay.classList.remove('active');
+          _pendingCallback = null;
+          _reviewDataUrl = null;
+        });
+        document.getElementById('gi-copy-crop-again').addEventListener('click', () => {
+          const cb = _pendingCallback;
+          const src = _reviewDataUrl || preview.src;
+          copyOverlay.classList.remove('active');
+          if (src) window.__GiShowCropModal(src, cb);
+        });
+        document.getElementById('gi-copy-save').addEventListener('click', () => {
+          const cb = _pendingCallback;
+          const src = _reviewDataUrl || preview.src;
+          copyOverlay.classList.remove('active');
+          if (cb && src) cb(src);
+          _pendingCallback = null;
+          _reviewDataUrl = null;
+        });
+      }
+
+      function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+      const MIN_SIZE = 0.035;
+
+      function getImageDisplayRect() {
+        const container = document.getElementById('gi-crop-container');
+        const img = document.getElementById('gi-crop-img');
+        const cr = container.getBoundingClientRect();
+        const iw = img.naturalWidth || 1;
+        const ih = img.naturalHeight || 1;
+        const imgRatio = iw / ih;
+        const contRatio = cr.width / cr.height;
+        let width, height, left, top;
+        if (contRatio > imgRatio) {
+          height = cr.height;
+          width = height * imgRatio;
+          left = (cr.width - width) / 2;
+          top = 0;
+        } else {
+          width = cr.width;
+          height = width / imgRatio;
+          left = 0;
+          top = (cr.height - height) / 2;
+        }
+        return { left, top, width, height };
+      }
+
+      function normalizeRect(r) {
+        let w = Math.max(MIN_SIZE, Math.min(1, Math.abs(r.w || MIN_SIZE)));
+        let h = Math.max(MIN_SIZE, Math.min(1, Math.abs(r.h || MIN_SIZE)));
+        let x = Math.max(0, Math.min(1 - w, r.x || 0));
+        let y = Math.max(0, Math.min(1 - h, r.y || 0));
+        return { x, y, w, h };
+      }
+
+      function applyBox(r) {
+        const box = document.getElementById('gi-crop-box');
+        if (!box) return;
+        cropRect = normalizeRect(r || cropRect);
+        const dr = getImageDisplayRect();
+        box.style.left = (dr.left + cropRect.x * dr.width) + 'px';
+        box.style.top = (dr.top + cropRect.y * dr.height) + 'px';
+        box.style.width = (cropRect.w * dr.width) + 'px';
+        box.style.height = (cropRect.h * dr.height) + 'px';
+      }
+
+      function clientToNorm(cx, cy) {
+        const container = document.getElementById('gi-crop-container');
+        const cr = container.getBoundingClientRect();
+        const dr = getImageDisplayRect();
+        return {
+          x: clamp01((cx - cr.left - dr.left) / dr.width),
+          y: clamp01((cy - cr.top - dr.top) / dr.height)
+        };
+      }
+
+      function initCropDrag() {
+        const container = document.getElementById('gi-crop-container');
+        const box = document.getElementById('gi-crop-box');
+
+        function onStart(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const n = clientToNorm(e.clientX, e.clientY);
+          const handle = e.target && e.target.dataset ? e.target.dataset.pos : null;
+          if (handle) {
+            drag = { type: handle, sx: n.x, sy: n.y, ox: cropRect.x, oy: cropRect.y, ow: cropRect.w, oh: cropRect.h };
+          } else if (e.target === box || box.contains(e.target)) {
+            drag = { type: 'move', sx: n.x, sy: n.y, ox: cropRect.x, oy: cropRect.y, ow: cropRect.w, oh: cropRect.h };
+          } else {
+            drag = { type: 'new', sx: n.x, sy: n.y };
+            cropRect = { x: n.x, y: n.y, w: MIN_SIZE, h: MIN_SIZE };
+            applyBox(cropRect);
+          }
+          if (e.pointerId && container.setPointerCapture) {
+            try { container.setPointerCapture(e.pointerId); } catch(_) {}
+          }
+        }
+
+        function onMove(e) {
+          if (!drag) return;
+          e.preventDefault();
+          const n = clientToNorm(e.clientX, e.clientY);
+          const dx = n.x - drag.sx;
+          const dy = n.y - drag.sy;
+
+          if (drag.type === 'move') {
+            cropRect = { x: drag.ox + dx, y: drag.oy + dy, w: drag.ow, h: drag.oh };
+          } else if (drag.type === 'new') {
+            cropRect = {
+              x: Math.min(drag.sx, n.x),
+              y: Math.min(drag.sy, n.y),
+              w: Math.max(MIN_SIZE, Math.abs(n.x - drag.sx)),
+              h: Math.max(MIN_SIZE, Math.abs(n.y - drag.sy))
+            };
+          } else {
+            let left = drag.ox;
+            let top = drag.oy;
+            let right = drag.ox + drag.ow;
+            let bottom = drag.oy + drag.oh;
+            if (drag.type.includes('w')) left = clamp01(drag.ox + dx);
+            if (drag.type.includes('e')) right = clamp01(drag.ox + drag.ow + dx);
+            if (drag.type.includes('n')) top = clamp01(drag.oy + dy);
+            if (drag.type.includes('s')) bottom = clamp01(drag.oy + drag.oh + dy);
+            if (right - left < MIN_SIZE) {
+              if (drag.type.includes('w')) left = right - MIN_SIZE;
+              else right = left + MIN_SIZE;
+            }
+            if (bottom - top < MIN_SIZE) {
+              if (drag.type.includes('n')) top = bottom - MIN_SIZE;
+              else bottom = top + MIN_SIZE;
+            }
+            cropRect = { x: left, y: top, w: right - left, h: bottom - top };
+          }
+          applyBox(cropRect);
+        }
+
+        function onEnd() { drag = null; }
+        container.addEventListener('pointerdown', onStart);
+        window.addEventListener('pointermove', onMove, { passive: false });
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
+      }
+
+      function applyCrop() {
+        const img = document.getElementById('gi-crop-img');
+        const iw = img.naturalWidth;
+        const ih = img.naturalHeight;
+        const r = normalizeRect(cropRect);
+        const sx = Math.round(r.x * iw);
+        const sy = Math.round(r.y * ih);
+        const sw = Math.max(1, Math.round(r.w * iw));
+        const sh = Math.max(1, Math.round(r.h * ih));
+        compressDataUrl(_srcDataUrl, sw, sh, sx, sy, sw, sh, _cropQuality)
+          .then(url => closeCrop(url))
+          .catch(err => { console.error('[GID] crop failed', err); closeCrop(_srcDataUrl); });
+      }
+
+      function compressDataUrl(dataUrl, dw, dh, sx, sy, sw, sh, quality) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              // iOS Safari: keep canvas pixels under 4MP to avoid blank output
+              const MAX_PX = 3000000;
+              const MAX_DIM = 1920;
+              let cw = Math.max(1, Math.round(dw));
+              let ch = Math.max(1, Math.round(dh));
+              // Scale down if too large for iOS
+              const scaleByDim = Math.min(1, MAX_DIM / Math.max(cw, ch));
+              const scaleByPx  = Math.min(1, Math.sqrt(MAX_PX / (cw * ch)));
+              const scale = Math.min(scaleByDim, scaleByPx);
+              canvas.width  = Math.max(1, Math.round(cw * scale));
+              canvas.height = Math.max(1, Math.round(ch * scale));
+              const ctx = canvas.getContext('2d', { alpha: false });
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+              // Try jpeg first, fallback to lower quality if it fails
+              let result = '';
+              try { result = canvas.toDataURL('image/jpeg', 0.82); } catch(e1) {
+                try {
+                  canvas.width = Math.round(canvas.width * 0.5);
+                  canvas.height = Math.round(canvas.height * 0.5);
+                  const ctx2 = canvas.getContext('2d', { alpha: false });
+                  ctx2.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+                  result = canvas.toDataURL('image/jpeg', 0.75);
+                } catch(e2) { reject(e2); return; }
+              }
+              if (!result || result === 'data:,') { reject(new Error('Canvas empty')); return; }
+              resolve(result);
+            } catch (err) { reject(err); }
+          };
+          img.onerror = () => reject(new Error('Image load failed'));
+          img.src = dataUrl;
+        });
+      }
+
+      function closeCrop(resultUrl) {
+        document.getElementById('gi-crop-overlay').classList.remove('active');
+        const cb = _pendingCallback;
+        if (resultUrl && cb) cb(resultUrl);
+        _pendingCallback = null;
+        _reviewDataUrl = null;
+        drag = null;
+      }
+
+      window.__GiShowCropModal = function(dataUrl, callback) {
+        _srcDataUrl = dataUrl;
+        _pendingCallback = callback;
+        const overlay = document.getElementById('gi-crop-overlay');
+        const img = document.getElementById('gi-crop-img');
+        const container = document.getElementById('gi-crop-container');
+        img.onload = () => {
+          const ratio = (img.naturalWidth || 1) / (img.naturalHeight || 1);
+          container.style.aspectRatio = String(ratio);
+          cropRect = { x: 0, y: 0, w: 1, h: 1 };
+          requestAnimationFrame(() => applyBox(cropRect));
+        };
+        img.src = dataUrl;
+        overlay.classList.add('active');
+        setTimeout(() => applyBox(cropRect), 60);
+      };
+
+      function dataUrlToPngBlob(dataUrl) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Unable to create image blob')), 'image/png');
+          };
+          img.onerror = () => reject(new Error('Image load failed'));
+          img.src = dataUrl;
+        });
+      }
+
+      async function copyDataUrlToClipboard(dataUrl) {
+        const blob = await dataUrlToPngBlob(dataUrl);
+        if (navigator.clipboard && window.ClipboardItem && navigator.clipboard.write) {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          return true;
+        }
+        const file = new File([blob], 'photo.png', { type: 'image/png' });
+        if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+          await navigator.share({ files: [file], title: 'Photo' });
+          return true;
+        }
+        throw new Error('Image copy is not supported by this browser');
+      }
+
+      window.__GiCopyImageToClipboard = async function(dataUrl, button) {
+        if (!dataUrl) return;
+        const oldText = button ? button.textContent : '';
+        if (button) button.textContent = 'Copying...';
+        try {
+          await copyDataUrlToClipboard(dataUrl);
+          if (button) button.textContent = 'Copied!';
+        } catch (err) {
+          console.warn('[GID] Copy image failed:', err);
+          if (button) button.textContent = 'Open Image';
+          const w = window.open(dataUrl, '_blank');
+          if (!w) alert('Copy is blocked by this browser. Long-press the photo and choose Copy/Save Image.');
+        } finally {
+          if (button) setTimeout(() => { button.textContent = oldText || 'Copy'; }, 1400);
+        }
+      };
+
+      function installPhotoCopyButtons() {
+        document.querySelectorAll('.gi-main-copy-btn,.gi-thumb-copy-btn').forEach(btn => btn.remove());
+      }
+    })();
+    </script>
+    <!-- ── END PHOTO SYSTEM ── -->
+
+    <!-- ══════════════════════════════════════════
+         AI & PROMPTS SIDEBAR
+    ══════════════════════════════════════════ -->
+    <style>
+      #gi-sidebar {
+        position: fixed; top: 0; right: 0; bottom: 0;
+        width: min(400px, 100vw);
+        background: #0f172a;
+        z-index: 9500;
+        display: flex; flex-direction: column;
+        transform: translateX(100%);
+        transition: transform 0.32s cubic-bezier(.4,0,.2,1);
+        box-shadow: -12px 0 48px rgba(0,0,0,.55);
+        overscroll-behavior: contain;
+      }
+      #gi-sidebar.open { transform: translateX(0); }
+      #gi-sidebar-backdrop {
+        display: none; position: fixed; inset: 0;
+        z-index: 9499; background: rgba(0,0,0,.5);
+        backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      }
+      #gi-sidebar-backdrop.active { display: block; }
+
+      /* Header */
+      #gi-sb-hdr {
+        display: flex; align-items: center; gap: 10px;
+        padding: 16px 16px 12px; border-bottom: 1px solid #1e293b; flex-shrink: 0;
+      }
+      #gi-sb-hdr h2 { flex:1; margin:0; font-size:17px; font-weight:900; color:#f1f5f9; letter-spacing:-.3px; }
+      #gi-sb-close {
+        width:34px; height:34px; border-radius:50%; border:none;
+        background:#1e293b; color:#94a3b8; font-size:18px; line-height:1;
+        cursor:pointer; display:flex; align-items:center; justify-content:center;
+        transition: background .15s;
+      }
+      #gi-sb-close:hover { background:#334155; color:#f1f5f9; }
+
+      /* Tabs */
+      #gi-sb-tabs {
+        display:flex; padding: 10px 14px 0; gap:6px; flex-shrink:0;
+      }
+      .gi-sb-tab {
+        flex:1; padding:9px 4px; border-radius:12px 12px 0 0; border:none;
+        font-size:13px; font-weight:800; cursor:pointer;
+        background:#1e293b; color:#64748b; transition:all .15s;
+      }
+      .gi-sb-tab.active { background:#1d4ed8; color:#fff; }
+
+      /* Scrollable body */
+      #gi-sb-body {
+        flex:1; overflow-y:auto; padding:14px;
+        -webkit-overflow-scrolling:touch;
+      }
+      #gi-sb-body::-webkit-scrollbar { width:3px; }
+      #gi-sb-body::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
+
+      .gi-panel { display:none; }
+      .gi-panel.active { display:block; }
+
+      /* ── AI tab ── */
+      .gi-ai-hint {
+        background:#0c1f3f; border:1px dashed #1e40af;
+        border-radius:12px; padding:11px 13px; margin-bottom:14px;
+        color:#93c5fd; font-size:12px; font-weight:600; line-height:1.45;
+        display:flex; align-items:flex-start; gap:8px;
+      }
+      .gi-ai-hint-icon { font-size:18px; flex-shrink:0; margin-top:1px; }
+      .gi-ai-card {
+        display:flex; align-items:center; gap:13px;
+        background:#1e293b; border:1px solid #334155;
+        border-radius:14px; padding:14px; margin-bottom:10px;
+        cursor:pointer; text-decoration:none;
+        transition: background .15s, transform .1s;
+      }
+      .gi-ai-card:active { transform:scale(.97); }
+      .gi-ai-card:hover { background:#263549; border-color:#3b82f6; }
+      .gi-ai-logo {
+        width:44px; height:44px; border-radius:12px;
+        display:flex; align-items:center; justify-content:center;
+        font-size:22px; font-weight:900; flex-shrink:0;
+      }
+      .gi-ai-meta { flex:1; }
+      .gi-ai-name { font-weight:800; color:#f1f5f9; font-size:15px; margin-bottom:2px; }
+      .gi-ai-sub  { font-size:11px; color:#64748b; line-height:1.35; }
+      .gi-ai-arr  { color:#475569; font-size:16px; }
+
+      .gi-sec-label {
+        font-size:10px; font-weight:800; text-transform:uppercase;
+        letter-spacing:.09em; color:#475569; margin: 16px 0 8px;
+      }
+
+      /* Photo grid */
+      .gi-photo-grid {
+        display:grid; grid-template-columns:repeat(3,1fr); gap:7px;
+      }
+      .gi-photo-thumb {
+        border-radius:10px; overflow:hidden; aspect-ratio:1;
+        background:#1e293b; cursor:pointer;
+        border:2px solid transparent; transition:border-color .15s;
+        position:relative;
+      }
+      .gi-photo-thumb:hover, .gi-photo-thumb:active { border-color:#3b82f6; }
+      .gi-photo-thumb img { width:100%; height:100%; object-fit:cover; pointer-events:none; display:block; }
+      .gi-photo-copy-overlay {
+        position:absolute; inset:0; background:rgba(15,23,42,.72);
+        display:flex; align-items:center; justify-content:center;
+        opacity:0; transition:opacity .15s; font-size:20px;
+      }
+      .gi-photo-thumb:hover .gi-photo-copy-overlay { opacity:1; }
+      .gi-photo-pt-label {
+        font-size:10px; font-weight:700; color:#64748b;
+        text-transform:uppercase; letter-spacing:.06em;
+        margin-bottom:5px; margin-top:10px;
+      }
+      .gi-no-photos { text-align:center; color:#475569; font-size:13px; padding:24px 0; }
+
+      /* ── Prompts tab ── */
+      .gi-new-folder-row {
+        display:flex; gap:8px; margin-bottom:14px;
+      }
+      .gi-new-folder-row input {
+        flex:1; min-width:0;
+        background:#1e293b; border:1px solid #334155;
+        border-radius:10px; padding:9px 11px;
+        color:#e2e8f0; font-size:13px; outline:none;
+      }
+      .gi-new-folder-row input:focus { border-color:#3b82f6; }
+      .gi-new-folder-row button {
+        background:#1d4ed8; color:#fff; border:none;
+        border-radius:10px; padding:9px 13px;
+        font-weight:800; font-size:13px; cursor:pointer; white-space:nowrap;
+      }
+      .gi-folder-card {
+        background:#1e293b; border:1px solid #2d3f55;
+        border-radius:13px; margin-bottom:9px; overflow:hidden;
+      }
+      .gi-folder-hdr {
+        display:flex; align-items:center; gap:9px; padding:12px 13px;
+        cursor:pointer; user-select:none; -webkit-user-select:none;
+      }
+      .gi-folder-hdr:hover { background:#263549; }
+      .gi-folder-ico { font-size:17px; }
+      .gi-folder-title { flex:1; font-weight:700; color:#e2e8f0; font-size:14px; }
+      .gi-folder-cnt { font-size:11px; color:#64748b; font-weight:600; }
+      .gi-folder-chev { color:#475569; font-size:13px; transition:transform .2s; }
+      .gi-folder-card.open .gi-folder-chev { transform:rotate(90deg); }
+      .gi-folder-body { display:none; padding:0 11px 11px; gap:7px; flex-direction:column; }
+      .gi-folder-card.open .gi-folder-body { display:flex; }
+
+      .gi-prompt-row {
+        background:#0f172a; border:1px solid #1e293b;
+        border-radius:10px; padding:10px 11px;
+        display:flex; align-items:flex-start; gap:9px;
+        transition:border-color .15s;
+      }
+      .gi-prompt-row:hover { border-color:#3b82f6; }
+      .gi-prompt-txt {
+        flex:1; font-size:12px; color:#cbd5e1;
+        line-height:1.5; word-break:break-word;
+      }
+      .gi-prompt-btns { display:flex; flex-direction:column; gap:5px; flex-shrink:0; }
+      .gi-btn-copy, .gi-btn-del {
+        border:none; border-radius:7px; padding:5px 8px;
+        font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap;
+      }
+      .gi-btn-copy { background:#1d4ed8; color:#fff; }
+      .gi-btn-copy.copied { background:#059669; }
+      .gi-btn-del { background:#450a0a; color:#fca5a5; }
+
+      .gi-add-prompt-wrap {
+        margin-top:7px; padding-top:9px; border-top:1px solid #1e293b;
+      }
+      .gi-add-prompt-wrap textarea {
+        width:100%; box-sizing:border-box; min-height:66px;
+        background:#1e293b; border:1px solid #334155; border-radius:9px;
+        padding:8px 10px; color:#e2e8f0; font-size:12px; outline:none;
+        resize:vertical; font-family:inherit;
+      }
+      .gi-add-prompt-wrap textarea:focus { border-color:#3b82f6; }
+      .gi-add-prompt-actions {
+        display:flex; justify-content:space-between; align-items:center;
+        margin-top:6px; gap:8px;
+      }
+      .gi-add-prompt-actions .gi-btn-add-prompt {
+        background:#059669; color:#fff; border:none;
+        border-radius:9px; padding:7px 13px;
+        font-weight:800; font-size:12px; cursor:pointer;
+      }
+      .gi-add-prompt-actions .gi-btn-del-folder {
+        background:#450a0a; color:#fca5a5; border:none;
+        border-radius:9px; padding:7px 11px;
+        font-weight:700; font-size:11px; cursor:pointer;
+      }
+
+      /* Toast */
+      #gi-sb-toast {
+        position:fixed; bottom:72px; left:50%;
+        transform:translateX(-50%) translateY(16px);
+        background:#059669; color:#fff; padding:9px 18px;
+        border-radius:999px; font-weight:800; font-size:13px;
+        opacity:0; transition:opacity .2s, transform .2s;
+        z-index:99997; pointer-events:none; white-space:nowrap;
+      }
+      #gi-sb-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    </style>
+
+    <div id="gi-sidebar-backdrop"></div>
+
+    <div id="gi-sidebar">
+      <div id="gi-sb-hdr">
+        <h2>&#129302; AI &amp; Prompts</h2>
+        <button id="gi-sb-close" aria-label="Close sidebar">&#10005;</button>
+      </div>
+      <div id="gi-sb-tabs">
+        <button class="gi-sb-tab active" data-tab="ai">AI Links</button>
+        <button class="gi-sb-tab" data-tab="prompts">Prompts</button>
+      </div>
+      <div id="gi-sb-body">
+
+        <!-- AI PANEL -->
+        <div class="gi-panel active" id="gi-panel-ai">
+          <div class="gi-ai-hint">
+            <span class="gi-ai-hint-icon">&#128247;</span>
+            <span>Tap any photo below to copy it to clipboard, then open an AI app and paste it directly into the chat.</span>
+          </div>
+
+          <div class="gi-sec-label">Open AI app</div>
+
+          <a class="gi-ai-card" href="#" onclick="window.__GiOpenAI('chatgpt');return false;">
+            <div class="gi-ai-logo" style="background:#0d3325;">&#129516;</div>
+            <div class="gi-ai-meta">
+              <div class="gi-ai-name">ChatGPT</div>
+              <div class="gi-ai-sub">Opens ChatGPT app on your iPhone</div>
+            </div>
+            <div class="gi-ai-arr">&#8250;</div>
+          </a>
+
+          <a class="gi-ai-card" href="#" onclick="window.__GiOpenAI('gemini');return false;">
+            <div class="gi-ai-logo" style="background:#0c1a3a;">&#128309;</div>
+            <div class="gi-ai-meta">
+              <div class="gi-ai-name">Gemini</div>
+              <div class="gi-ai-sub">Opens Google Gemini app on your iPhone</div>
+            </div>
+            <div class="gi-ai-arr">&#8250;</div>
+          </a>
+
+          <a class="gi-ai-card" href="#" onclick="window.__GiOpenAI('claude');return false;">
+            <div class="gi-ai-logo" style="background:#2d1a07;">&#129505;</div>
+            <div class="gi-ai-meta">
+              <div class="gi-ai-name">Claude</div>
+              <div class="gi-ai-sub">Opens Claude app on your iPhone</div>
+            </div>
+            <div class="gi-ai-arr">&#8250;</div>
+          </a>
+
+          <div class="gi-sec-label" id="gi-photos-label">Patient photos &mdash; tap to copy</div>
+          <div id="gi-photo-grid-wrap"></div>
+        </div>
+
+        <!-- PROMPTS PANEL -->
+        <div class="gi-panel" id="gi-panel-prompts">
+          <div class="gi-new-folder-row">
+            <input id="gi-folder-inp" placeholder="New folder name..." maxlength="40" />
+            <button onclick="window.__GiAddFolder()">+ Folder</button>
+          </div>
+          <div id="gi-folders-root"></div>
+        </div>
+
+      </div><!-- /gi-sb-body -->
+    </div><!-- /gi-sidebar -->
+
+    <div id="gi-sb-toast"></div>
+
+    <script>
+    (function(){
+      'use strict';
+      var PKEY = 'gi_sidebar_prompts_v1';
+      var DB_STORE_KEY = 'hospitalData_v7';
+
+      var DEFAULT_FOLDERS = [
+        { id:'f1', name:'General Medicine', icon:'🩺', prompts:[
+          { id:'p1', text:'Summarise this ECG finding and suggest differential diagnoses.' },
+          { id:'p2', text:'What are the Indian/NICE guidelines for management of this condition?' },
+          { id:'p3', text:'Write a concise discharge summary based on the following clinical notes:' }
+        ]},
+        { id:'f2', name:'Cardiology', icon:'❤️', prompts:[
+          { id:'p4', text:'Interpret this echocardiogram report. Grade diastolic dysfunction if applicable.' },
+          { id:'p5', text:'Calculate and interpret the H2FPEF score for this patient.' },
+          { id:'p6', text:'What does this chest X-ray show in the context of heart failure?' }
+        ]},
+        { id:'f3', name:'Lab Values', icon:'🔬', prompts:[
+          { id:'p7', text:'Analyse these blood results and flag any critical values.' },
+          { id:'p8', text:'What is the likely cause of this electrolyte imbalance?' }
+        ]}
+      ];
+
+      var folders = [];
+
+      function uid(){ return '_'+Math.random().toString(36).substr(2,9); }
+
+      function getLocalForage(){
+        return (typeof localforage !== 'undefined') ? localforage : null;
+      }
+
+      function readPromptBackup(){
+        try {
+          var raw = localStorage.getItem(PKEY);
+          if(!raw) return null;
+          var parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : null;
+        } catch(e) { return null; }
+      }
+
+      function writePromptBackup(){
+        try { localStorage.setItem(PKEY, JSON.stringify(folders)); } catch(e) {}
+      }
+
+      function cloneDefaults(){
+        return JSON.parse(JSON.stringify(DEFAULT_FOLDERS));
+      }
+
+      function loadFolders(){
+        // Prompt folders are small, so localStorage is the most reliable
+        // persistence layer on iPhone/Safari refreshes. localForage is used
+        // only as an optional secondary backup when available.
+        var localSaved = readPromptBackup();
+        if(localSaved){ folders = localSaved; renderFolders(); return; }
+
+        var lf = getLocalForage();
+        if(!lf){ folders = cloneDefaults(); writePromptBackup(); renderFolders(); return; }
+        lf.getItem(PKEY).then(function(d){
+          folders = (Array.isArray(d) && d.length) ? d : cloneDefaults();
+          writePromptBackup();
+          renderFolders();
+        }).catch(function(){ folders = cloneDefaults(); writePromptBackup(); renderFolders(); });
+      }
+
+      function saveFolders(){
+        writePromptBackup();
+        var lf = getLocalForage();
+        if(lf) lf.setItem(PKEY, folders).catch(function(){});
+      }
+
+      /* ───── open / close ───── */
+      window.__GiSidebarSetOpen = function(open){
+        var sb = document.getElementById('gi-sidebar');
+        var bd = document.getElementById('gi-sidebar-backdrop');
+        if(!sb) return;
+        if(open){
+          sb.classList.add('open');
+          bd.classList.add('active');
+          refreshPhotos();
+        } else {
+          sb.classList.remove('open');
+          bd.classList.remove('active');
+        }
+      };
+
+      /* ───── tabs ───── */
+      function initTabs(){
+        document.querySelectorAll('.gi-sb-tab').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            document.querySelectorAll('.gi-sb-tab').forEach(function(b){ b.classList.remove('active'); });
+            document.querySelectorAll('.gi-panel').forEach(function(p){ p.classList.remove('active'); });
+            btn.classList.add('active');
+            var panel = document.getElementById('gi-panel-'+btn.dataset.tab);
+            if(panel) panel.classList.add('active');
+          });
+        });
+      }
+
+      /* ───── AI deep-links ───── */
+      window.__GiOpenAI = function(svc){
+        var schemes = { chatgpt:'chatgpt://', gemini:null, claude:'claude://' };
+        var fallbacks = { chatgpt:'https://chat.openai.com', gemini:'https://gemini.google.com/app', claude:'https://claude.ai' };
+        var scheme = schemes[svc];
+        if(/iPhone|iPad|iPod/i.test(navigator.userAgent) && scheme){
+          var gone = false;
+          window.location.href = scheme;
+          setTimeout(function(){
+            if(!gone) window.location.href = fallbacks[svc];
+          }, 1500);
+          document.addEventListener('visibilitychange', function onVis(){
+            gone = true;
+            document.removeEventListener('visibilitychange', onVis);
+          }, { once:true });
+        } else {
+          window.open(fallbacks[svc], '_blank');
+        }
+      };
+
+      /* ───── photos ───── */
+      function refreshPhotos(){
+        var wrap = document.getElementById('gi-photo-grid-wrap');
+        var label = document.getElementById('gi-photos-label');
+        if(!wrap) return;
+        var lf = getLocalForage();
+        if(!lf){ wrap.innerHTML = '<div class="gi-no-photos">Storage unavailable</div>'; return; }
+        lf.getItem(DB_STORE_KEY).then(function(patients){
+          patients = patients || [];
+          var totalPics = 0;
+          patients.forEach(function(p){ totalPics += (p.images||[]).length; });
+          if(label) label.textContent = 'Patient photos \u2014 tap to copy (' + totalPics + ')';
+          if(totalPics === 0){ wrap.innerHTML = '<div class="gi-no-photos">No photos saved yet</div>'; return; }
+          wrap.innerHTML = '';
+          patients.forEach(function(pt){
+            var imgs = pt.images || [];
+            if(!imgs.length) return;
+            var lbl = document.createElement('div');
+            lbl.className = 'gi-photo-pt-label';
+            lbl.textContent = (pt.name || 'Unnamed') + (pt.room ? ' \u00b7 Rm '+pt.room : '');
+            wrap.appendChild(lbl);
+            var grid = document.createElement('div');
+            grid.className = 'gi-photo-grid';
+            imgs.forEach(function(img){
+              var src = (img && img.src) ? img.src : img;
+              var thumb = document.createElement('div');
+              thumb.className = 'gi-photo-thumb';
+              var im = document.createElement('img');
+              im.src = src; im.alt = '';
+              var ov = document.createElement('div');
+              ov.className = 'gi-photo-copy-overlay';
+              ov.textContent = '\uD83D\uDCCB';
+              thumb.appendChild(im); thumb.appendChild(ov);
+              thumb.addEventListener('click', function(){ copyPhoto(src, thumb); });
+              grid.appendChild(thumb);
+            });
+            wrap.appendChild(grid);
+          });
+        }).catch(function(){ wrap.innerHTML = '<div class="gi-no-photos">Could not load photos</div>'; });
+      }
+
+      function copyPhoto(src, thumb){
+        if(window.__GiCopyImageToClipboard){
+          // Create a dummy button for feedback
+          var fake = { textContent:'', _orig:'' };
+          window.__GiCopyImageToClipboard(src, {
+            get textContent(){ return fake._orig; },
+            set textContent(v){
+              fake._orig = v;
+              if(v === 'Copied!'){ showToast('Photo copied \u2014 paste in AI app'); thumb.style.borderColor='#22c55e'; setTimeout(function(){ thumb.style.borderColor=''; },1400); }
+            }
+          });
+        } else {
+          var w = window.open('','_blank');
+          if(w){ w.document.write('<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;"><p style="color:white;font-family:sans-serif;font-weight:700;font-size:15px;text-align:center;padding:12px;">Long-press the image \u2192 Copy Image</p><img src="'+src+'" style="max-width:100%;max-height:85vh;object-fit:contain;" /></body></html>'); w.document.close(); }
+        }
+      }
+
+      /* ───── toast ───── */
+      function showToast(msg){
+        var t = document.getElementById('gi-sb-toast');
+        if(!t) return;
+        t.textContent = msg;
+        t.classList.add('show');
+        setTimeout(function(){ t.classList.remove('show'); }, 2200);
+      }
+      window.__GiShowToast = showToast;
+
+      /* ───── folders render ───── */
+      function esc(s){ var s2=(s||''); var amp='&'+'amp;'; var lt='&'+'lt;'; var gt='&'+'gt;'; s2=s2.split('&').join(amp); s2=s2.split('<').join(lt); s2=s2.split('>').join(gt); return s2; }
+
+      function renderFolders(){
+        var root = document.getElementById('gi-folders-root');
+        if(!root) return;
+        root.innerHTML = '';
+        if(!folders.length){
+          root.innerHTML = '<div style="text-align:center;color:#475569;font-size:13px;padding:28px 0;">No folders yet \u2014 create one above</div>';
+          return;
+        }
+        folders.forEach(function(folder, fi){
+          var card = document.createElement('div');
+          card.className = 'gi-folder-card';
+
+          // header
+          var hdr = document.createElement('div');
+          hdr.className = 'gi-folder-hdr';
+          hdr.innerHTML =
+            '<span class="gi-folder-ico">'+folder.icon+'</span>'+
+            '<span class="gi-folder-title">'+esc(folder.name)+'</span>'+
+            '<span class="gi-folder-cnt">'+folder.prompts.length+'</span>'+
+            '<span class="gi-folder-chev">›</span>';
+          hdr.addEventListener('click', function(){ card.classList.toggle('open'); });
+          card.appendChild(hdr);
+
+          // body
+          var body = document.createElement('div');
+          body.className = 'gi-folder-body';
+
+          folder.prompts.forEach(function(pr, pi){
+            var row = document.createElement('div');
+            row.className = 'gi-prompt-row';
+
+            var txt = document.createElement('div');
+            txt.className = 'gi-prompt-txt';
+            txt.textContent = pr.text;
+
+            var btns = document.createElement('div');
+            btns.className = 'gi-prompt-btns';
+
+            var copyBtn = document.createElement('button');
+            copyBtn.className = 'gi-btn-copy';
+            copyBtn.textContent = 'Copy';
+            copyBtn.addEventListener('click', function(){
+              navigator.clipboard.writeText(pr.text).then(function(){
+                copyBtn.textContent = 'Copied!';
+                copyBtn.classList.add('copied');
+                showToast('Prompt copied!');
+                setTimeout(function(){ copyBtn.textContent='Copy'; copyBtn.classList.remove('copied'); }, 1800);
+              }).catch(function(){
+                var ta = document.createElement('textarea');
+                ta.value = pr.text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+                copyBtn.textContent='Copied!'; copyBtn.classList.add('copied');
+                showToast('Prompt copied!');
+                setTimeout(function(){ copyBtn.textContent='Copy'; copyBtn.classList.remove('copied'); }, 1800);
+              });
+            });
+
+            var delBtn = document.createElement('button');
+            delBtn.className = 'gi-btn-del';
+            delBtn.textContent = 'Del';
+            delBtn.addEventListener('click', function(){
+              folders[fi].prompts.splice(pi, 1);
+              saveFolders();
+              var open = card.classList.contains('open');
+              renderFolders();
+              if(open){ var cards = document.querySelectorAll('.gi-folder-card'); if(cards[fi]) cards[fi].classList.add('open'); }
+            });
+
+            btns.appendChild(copyBtn); btns.appendChild(delBtn);
+            row.appendChild(txt); row.appendChild(btns);
+            body.appendChild(row);
+          });
+
+          // add prompt area
+          var addWrap = document.createElement('div');
+          addWrap.className = 'gi-add-prompt-wrap';
+          var ta = document.createElement('textarea');
+          ta.placeholder = 'Type new prompt...';
+          var actRow = document.createElement('div');
+          actRow.className = 'gi-add-prompt-actions';
+          var addBtn = document.createElement('button');
+          addBtn.className = 'gi-btn-add-prompt';
+          addBtn.textContent = '+ Add Prompt';
+          addBtn.addEventListener('click', function(){
+            var txt = ta.value.trim();
+            if(!txt) return;
+            folders[fi].prompts.push({ id:uid(), text:txt });
+            ta.value = '';
+            saveFolders();
+            renderFolders();
+            var cards = document.querySelectorAll('.gi-folder-card');
+            if(cards[fi]) cards[fi].classList.add('open');
+          });
+          var delFolderBtn = document.createElement('button');
+          delFolderBtn.className = 'gi-btn-del-folder';
+          delFolderBtn.textContent = 'Delete folder';
+          delFolderBtn.addEventListener('click', function(){
+            if(!confirm('Delete "'+folder.name+'" and all its prompts?')) return;
+            folders.splice(fi, 1);
+            saveFolders();
+            renderFolders();
+          });
+          actRow.appendChild(addBtn); actRow.appendChild(delFolderBtn);
+          addWrap.appendChild(ta); addWrap.appendChild(actRow);
+          body.appendChild(addWrap);
+          card.appendChild(body);
+          root.appendChild(card);
+        });
+      }
+
+      window.__GiAddFolder = function(){
+        var inp = document.getElementById('gi-folder-inp');
+        var name = (inp ? inp.value : '').trim();
+        if(!name) return;
+        folders.push({ id:uid(), name:name, icon:'📁', prompts:[] });
+        if(inp) inp.value = '';
+        saveFolders();
+        renderFolders();
+      };
+
+      /* ───── init ───── */
+      document.addEventListener('DOMContentLoaded', function(){
+        var closeBtn = document.getElementById('gi-sb-close');
+        if(closeBtn) closeBtn.addEventListener('click', function(){
+          if(window.__GiSidebarOnClose) window.__GiSidebarOnClose();
+          else window.__GiSidebarSetOpen(false);
+        });
+        var backdrop = document.getElementById('gi-sidebar-backdrop');
+        if(backdrop) backdrop.addEventListener('click', function(){
+          if(window.__GiSidebarOnClose) window.__GiSidebarOnClose();
+          else window.__GiSidebarSetOpen(false);
+        });
+        initTabs();
+        loadFolders();
+        var folderInp = document.getElementById('gi-folder-inp');
+        if(folderInp) folderInp.addEventListener('keydown', function(e){ if(e.key==='Enter') window.__GiAddFolder(); });
+      });
+
+    })();
+    </script>
+    <!-- ── END AI & PROMPTS SIDEBAR ── -->
+    <!-- FIX: prompts persist in localStorage; unable-load-image alert removed. -->
+
+    <script>navigator.serviceWorker.getRegistrations().then(r=>{r.forEach(sw=>sw.unregister())});</script>
+    <script type="module" crossorigin src="/assets/index-EDITDESCV1-SMARTPASTE3.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-EDITDESCV1.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

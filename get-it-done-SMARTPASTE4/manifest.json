@@ -1,0 +1,29 @@
+{
+  "short_name": "Get It Done",
+  "name": "Get It Done",
+  "description": "Medical task and reminder system.",
+  "icons": [
+    {
+      "src": "get-it-done-icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "get-it-done-icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "get-it-done-icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": "./",
+  "background_color": "#2d2f41",
+  "display": "standalone",
+  "theme_color": "#2d2f41"
+}
